@@ -1,14 +1,19 @@
 import yaml
 from Activity import Activity
+import Activity as ActivityUtil
 from Constraint import Constraint
+import Constraint as ConstraintUtil
 from TimeInterval import TimeInterval, generate_all_time_intervals
+
+
+costs = {}
 
 
 def map_activity_type(scheduling_type):
     return {
-        'exact_interval': Activity.TYPE_STRICT,
-        'nr_instances': Activity.TYPE_INSTANCES_DAY,
-        'relative': Activity.TYPE_RELATIVE,
+        'exact_interval': ActivityUtil.TYPE_STRICT,
+        'nr_instances': ActivityUtil.TYPE_INSTANCES,
+        'relative': ActivityUtil.TYPE_RELATIVE,
     }[scheduling_type]
 
 
@@ -20,19 +25,27 @@ def map_duration(parsed_content):
         factor = {
             'seconds': 1,
             'minute': 60,
-            'hour': 3600
+            'hour': 3600,
+            'day': 24 * 3600
         }[parsed_content['duration']['unit']]
         return parsed_content['duration']['value'] * factor
 
     return None
 
 
+def map_relative_activity_direction(indicator):
+    return {
+        'before': ConstraintUtil.RELATIVE_ACTIVITY_DIRECTION_BEFORE,
+        'after': ConstraintUtil.RELATIVE_ACTIVITY_DIRECTION_AFTER,
+    }[indicator]
+
+
 def generate_domain(parsed_content, activity: Activity):
-    if activity.type == Activity.TYPE_STRICT:
+    if activity.type == ActivityUtil.TYPE_STRICT:
         return [TimeInterval(
-            parsed_content['interval']['day'],
             parsed_content['interval']['start'],
-            parsed_content['interval']['end']
+            parsed_content['interval']['end'],
+            parsed_content['interval']['day']
         )]
 
     return generate_all_time_intervals(activity.duration)
@@ -40,55 +53,76 @@ def generate_domain(parsed_content, activity: Activity):
 
 def compose_activity(content):
     restrictions = []
-    relative_activity = []
 
     return Activity(
         content['name'],
         map_duration(content),
         map_activity_type(content['scheduling_type']),
         restrictions,
-        relative_activity
     )
 
 
-def generate_strict_constraint(activity: Activity):
+def generate_strict_constraint(activity: Activity, interval):
     return Constraint(
-        constraint_type=Constraint.CONSTRAINT_EXACT,
-        activity=activity
+        constraint_type=ConstraintUtil.CONSTRAINT_EXACT,
+        costs=costs,
+        activity=activity,
+        strict_interval=TimeInterval(interval['start'], interval['end'], interval['day'])
     )
 
 
-def generate_relative_constraint(activity: Activity):
+def generate_relative_constraint(activity: Activity, parsed_activity):
+    direction = -1
+    for item in parsed_activity:
+        if item == 'after':
+            direction = item
+            break
+        if item == 'before':
+            direction = item
+            break
+
+    factor = {
+        'seconds': 1,
+        'minute': 60,
+        'hour': 3600,
+        'day': 24 * 3600
+    }[parsed_activity[direction]['relative_within']['unit']]
+
+    return Constraint(
+        constraint_type=ConstraintUtil.CONSTRAINT_RELATIVE,
+        costs=costs,
+        activity=activity,
+        relative_activity_direction=map_relative_activity_direction(direction),
+        relative_activity=parsed_activity[direction]['activity_type'],
+        distance_from=parsed_activity[direction]['relative_within']['value'] * factor
+    )
+
+
+def generate_instances_constraint(activity: Activity, parsed_activity):
     return Constraint(
         constraint_type=activity.type,
+        costs=costs,
         activity=activity,
-        instances_week=activity.TYPE_INSTANCES_WEEK,
-        instances_day=activity.TYPE_INSTANCES_DAY
+        instances_week=parsed_activity['instances_per_week'],
+        instances_day=parsed_activity['instances_per_day']
     )
 
 
-def generate_instances_constraint(activity: Activity):
+def generate_preferred_constraint(activity, interval_list):
     return Constraint(
-        constraint_type=activity.type,
+        constraint_type=ConstraintUtil.CONSTRAINT_PREFERRED,
+        costs=costs,
         activity=activity,
-        instances_week=activity.TYPE_INSTANCES_WEEK,
-        instances_day=activity.TYPE_INSTANCES_DAY
+        preferred=interval_list
     )
 
 
-def generate_preferred_constraint(activity, content):
+def generate_excluded_constraint(activity, interval_list):
     return Constraint(
-        constraint_type=Constraint.CONSTRAINT_PREFERRED,
+        constraint_type=ConstraintUtil.CONSTRAINT_EXCLUSIVE,
+        costs=costs,
         activity=activity,
-        preferred=TimeInterval(content['day'], content['start'], content['end'])
-    )
-
-
-def generate_excluded_constraint(activity, content):
-    return Constraint(
-        constraint_type=Constraint.CONSTRAINT_EXCLUSIVE,
-        activity=activity,
-        excluded=TimeInterval(content['day'], content['start'], content['end'])
+        excluded=interval_list
     )
 
 
@@ -96,11 +130,13 @@ def generate_distance_constraint(activity, content):
     factor = {
         'seconds': 1,
         'minute': 60,
-        'hour': 3600
+        'hour': 3600,
+        'day': 24 * 3600
     }[content['unit']]
 
     return Constraint(
-        constraint_type=Constraint.CONSTRAINT_DISTANCE,
+        constraint_type=ConstraintUtil.CONSTRAINT_DISTANCE,
+        costs=costs,
         activity=activity,
         relative_activity=content['activity_type'],
         distance_from=content['value'] * factor
@@ -109,27 +145,36 @@ def generate_distance_constraint(activity, content):
 
 def compose_constraints(parsed_activity, activity):
     constraints = []
-    if activity.type == Activity.TYPE_STRICT:
-        constraints = [generate_strict_constraint(activity)]
-    if activity.type in [Activity.TYPE_INSTANCES_DAY, Activity.TYPE_INSTANCES_WEEK]:
-        constraints = [generate_instances_constraint(activity)]
-    if activity.type in Activity.TYPE_RELATIVE:
-        constraints = [generate_relative_constraint(activity)]
-
-    if activity.type in Activity.TYPE_MIX:
-        for field, content in parsed_activity:
+    if activity.type == ActivityUtil.TYPE_STRICT:
+        constraints = [generate_strict_constraint(activity, parsed_activity['interval'])]
+    if activity.type == ActivityUtil.TYPE_RELATIVE:
+        constraints = [generate_relative_constraint(activity, parsed_activity)]
+    if activity.type == ActivityUtil.TYPE_INSTANCES:
+        constraints = [generate_instances_constraint(activity, parsed_activity)]
+        for field, content in parsed_activity.items():
 
             if field == 'preferred_intervals':
+                preferred_list = []
                 for preferred_interval in content:
-                    constraints.append(generate_preferred_constraint(activity, preferred_interval['interval']))
+                    day = preferred_interval['interval']['day'] if 'day' in preferred_interval['interval'] else None
+                    start = preferred_interval['interval']['start']
+                    end = preferred_interval['interval']['end']
+                    preferred_list.append(TimeInterval(day=day, start=start, end=end))
+                constraints.append(generate_preferred_constraint(activity, preferred_list))
 
             if field == 'excluded_intervals':
+                excluded_list = []
                 for excluded_interval in content:
-                    constraints.append(generate_excluded_constraint(activity, excluded_interval['interval']))
+                    day = excluded_interval['interval']['day'] if 'day' in excluded_interval['interval'] else None
+                    start = excluded_interval['interval']['start']
+                    end = excluded_interval['interval']['end']
+                    excluded_list.append(TimeInterval(day=day, start=start, end=end))
+                constraints.append(generate_excluded_constraint(activity, excluded_list))
 
             if field == 'minimal_distance_from':
                 for related_activity in content:
                     constraints.append(generate_distance_constraint(activity, related_activity['activity']))
+
     return constraints
 
 
@@ -145,12 +190,15 @@ class IOHandler:
         variables = []
         constraints = []
         domains = {}
+        global costs
+        costs = content['costs']
+        costs['c_strict'] = 99999
 
         for parsed_activity in content['activity_list']:
-            activity_content = parsed_activity['content']
+            activity_content = parsed_activity['activity']
             activity = compose_activity(activity_content)
             variables.append(activity)
             domains[activity.name] = generate_domain(activity_content, activity)
-            constraints.append(compose_constraints(activity_content))
+            constraints.append(compose_constraints(activity_content, activity))
 
-        return content['costs'], variables, domains, constraints
+        return variables, domains, constraints

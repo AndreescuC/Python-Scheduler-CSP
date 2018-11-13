@@ -1,24 +1,22 @@
-class Activity:
+TYPE_STRICT = 0
+TYPE_INSTANCES = 1
+TYPE_RELATIVE = 2
+TYPE_MIX = 3
 
-    TYPE_STRICT = 0
-    TYPE_INSTANCES_DAY = 1
-    TYPE_INSTANCES_WEEK = 2
-    TYPE_RELATIVE = 4
-    TYPE_MIX = 5
+
+class Activity:
 
     def __init__(
             self,
             name,
             duration,
             activity_type,
-            restrictions,
-            relative_activity=None
+            restrictions
     ):
         self.name = name
         self.duration = duration
         self.type = activity_type
         self.restrictions = restrictions
-        self.relative_activity = relative_activity if type == self.TYPE_RELATIVE else None
 
     def __repr__(self):
         return "<Test a:%s b:%s>" % (self.a, self.b)

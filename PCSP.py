@@ -26,7 +26,6 @@ def fixed_constraints(solution, constraints):
 def PCSP(variables, domains, constraints, solution, cost):
     global best_solution
     global best_cost
-    global costs
 
     if not variables:
         # Dacă nu mai sunt variabile, am ajuns la o soluție mai bună
@@ -57,7 +56,7 @@ def PCSP(variables, domains, constraints, solution, cost):
         new_cost = cost
         constraint: Constraint
         for constraint in valid_constraints:
-            new_cost += constraint.evaluate(new_solution, costs)
+            new_cost += constraint.evaluate(new_solution)
 
         # Verificăm dacă noul cost este mai mic decât cel mai bun cost
         if new_cost < best_cost:
@@ -72,20 +71,19 @@ def PCSP(variables, domains, constraints, solution, cost):
 def main():
     global best_solution
     global best_cost
-    global costs
 
     input_file = 'input.yml'
     output_file = 'output.yml'
 
     io_handler = IOHandler(input_file)
-    [costs, variables, domains, constraints] = io_handler.read_yaml()
+    variables, domains, constraints = io_handler.read_yaml()
 
-    # best_solution = {}
-    # best_cost = len(constraints)
-    #
-    # PCSP(variables, deepcopy(domains), constraints, {}, 0)
-    #
-    # print("[FINAL] Best found: " + str(best_cost) + " - " + str(best_solution))
+    best_solution = {}
+    best_cost = len(constraints)
+
+    PCSP(variables, deepcopy(domains), constraints, {}, 0)
+
+    print("[FINAL] Best found: " + str(best_cost) + " - " + str(best_solution))
 
 
 if __name__ == "__main__":
