@@ -1,6 +1,6 @@
 from copy import copy, deepcopy
 import Constraint
-import IOHandler
+from IOHandler import IOHandler
 
 
 def get_constraints(var, constraints):
@@ -26,6 +26,7 @@ def fixed_constraints(solution, constraints):
 def PCSP(variables, domains, constraints, solution, cost):
     global best_solution
     global best_cost
+    global costs
 
     if not variables:
         # Dacă nu mai sunt variabile, am ajuns la o soluție mai bună
@@ -56,7 +57,7 @@ def PCSP(variables, domains, constraints, solution, cost):
         new_cost = cost
         constraint: Constraint
         for constraint in valid_constraints:
-            new_cost += constraint.evaluate(new_solution)
+            new_cost += constraint.evaluate(new_solution, costs)
 
         # Verificăm dacă noul cost este mai mic decât cel mai bun cost
         if new_cost < best_cost:
@@ -71,11 +72,12 @@ def PCSP(variables, domains, constraints, solution, cost):
 def main():
     global best_solution
     global best_cost
+    global costs
 
-    input = 'input.yml'
-    output = 'output.yml'
+    input_file = 'input.yml'
+    output_file = 'output.yml'
 
-    io_handler = IOHandler.IOHandler(input)
+    io_handler = IOHandler(input_file)
     [costs, variables, domains, constraints] = io_handler.read_yaml()
 
     # best_solution = {}

@@ -9,9 +9,12 @@ class Constraint:
 
     CONSTRAINT_PREFERRED = 0
     CONSTRAINT_EXCLUSIVE = 1
-    CONSTRAINT_RELATIVE = 2
-    CONSTRAINT_RELATIVE_SELF = 3
+    CONSTRAINT_EXACT = 2
+    CONSTRAINT_RELATIVE = 3
+    CONSTRAINT_RELATIVE_SELF = 4
+    CONSTRAINT_DISTANCE = 5
 
+    C_EXACT = 'c_exact'
     C_MISSING_INSTANCE_WEEK = 'c_missing_instance_week'
     C_MISSING_INSTANCE_DAY = 'c_missing_instance_day'
     C_RELATIVE = 'c_relative'
@@ -24,22 +27,36 @@ class Constraint:
             constraint_type,
             relative_activity=None,
             activity=None,
+            instances_day=None,
+            instances_week=None,
+            preferred=None,
+            excluded=None,
+            distance_from=None
     ):
         self.constraint_type = constraint_type
         self.activity = activity
-        self.relative_activity = relative_activity if type == self.CONSTRAINT_RELATIVE else None
+        self.relative_activity = relative_activity
+        self.instances_day = instances_day
+        self.instances_week = instances_week if instances_week is not None else 7
+        self.preferred = preferred
+        self.excluded = excluded
+        self.distance_from = distance_from
+        self.costs[self.C_EXACT] = 9999999
 
-    def __repr__(self):
-        return "<Test a:%s b:%s>" % (self.a, self.b)
-
-    def __str__(self):
-        return "From str method of Test: a is %s, b is %s" % (self.a, self.b)
+    # def __repr__(self):
+    #     return "<Test a:%s b:%s>" % (self.a, self.b)
+    #
+    # def __str__(self):
+    #     return "From str method of Test: a is %s, b is %s" % (self.a, self.b)
 
     def can_be_evaluated(self, solution):
         return False
 
     def depends_on(self, var: Activity):
         return False
+
+    def compute_cost_exact(self):
+        return self.costs[self.C_EXACT]
 
     def compute_cost_relative(self, activity_start, relative_interval_start, relative_interval_end):
         cost = self.costs[self.C_RELATIVE]
@@ -82,7 +99,10 @@ class Constraint:
     def evaluate(self):
         evaluating_function, parameters = {
             self.CONSTRAINT_RELATIVE: self.compute_cost_relative,
-            'b': 2,
+            self.CONSTRAINT_EXCLUSIVE: self.compute_cost_excluded,
+            self.CONSTRAINT_PREFERRED: self.compute_cost_preferred,
+            self.CONSTRAINT_DISTANCE: self.compute_cost_distance,
+            self.CONSTRAINT_EXACT: self.compute_cost_distance
         }[self.constraint_type]
 
         return evaluating_function(*parameters)
