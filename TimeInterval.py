@@ -1,14 +1,14 @@
 def generate_all_time_intervals(duration):
-    starting_time = 7 * 3600
+    starting_time = 7 * 60
     return [
         [
             TimeInterval(
                 day=day,
-                start=time_unit * 5 * 60 + starting_time,
-                end=time_unit * 5 * 60 + starting_time + duration
+                start=time_unit * 5 + starting_time,
+                end=time_unit * 5 + starting_time + duration
             )
             for time_unit in range(18 * 12)
-            if time_unit * 5 * 60 + starting_time + duration < 24 * 3600
+            if time_unit * 5 + starting_time + duration < 24 * 60
         ]
         for day in range(1, 8)
     ]
@@ -33,3 +33,6 @@ class TimeInterval:
         self.start = start
         self.end = end
         self.duration = end - start
+
+    def __repr__(self):
+        return "<TimeInterval Day %d : [%d - %d] (%d minutes)>" % (self.day, self.start, self.end, self.duration)

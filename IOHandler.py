@@ -23,10 +23,9 @@ def map_duration(parsed_content):
 
     if 'duration' in parsed_content:
         factor = {
-            'seconds': 1,
-            'minute': 60,
-            'hour': 3600,
-            'day': 24 * 3600
+            'minute': 1,
+            'hour': 60,
+            'day': 24 * 60,
         }[parsed_content['duration']['unit']]
         return parsed_content['duration']['value'] * factor
 
@@ -82,10 +81,9 @@ def generate_relative_constraint(activity: Activity, parsed_activity):
             break
 
     factor = {
-        'seconds': 1,
-        'minute': 60,
-        'hour': 3600,
-        'day': 24 * 3600
+        'minute': 1,
+        'hour': 60,
+        'day': 24 * 60,
     }[parsed_activity[direction]['relative_within']['unit']]
 
     return Constraint(
@@ -100,7 +98,7 @@ def generate_relative_constraint(activity: Activity, parsed_activity):
 
 def generate_instances_constraint(activity: Activity, parsed_activity):
     return Constraint(
-        constraint_type=activity.type,
+        constraint_type=ConstraintUtil.CONSTRAINT_INSTANCES,
         costs=costs,
         activity=activity,
         instances_week=parsed_activity['instances_per_week'],
@@ -128,17 +126,16 @@ def generate_excluded_constraint(activity, interval_list):
 
 def generate_distance_constraint(activity, content):
     factor = {
-        'seconds': 1,
-        'minute': 60,
-        'hour': 3600,
-        'day': 24 * 3600
+        'minute': 1,
+        'hour': 60,
+        'day': 24 * 60,
     }[content['unit']]
 
     return Constraint(
         constraint_type=ConstraintUtil.CONSTRAINT_DISTANCE,
         costs=costs,
         activity=activity,
-        relative_activity=content['activity_type'],
+        relative_activity=content['activity_type'] if content['activity_type'] != 'self' else activity.name,
         distance_from=content['value'] * factor
     )
 
@@ -199,6 +196,6 @@ class IOHandler:
             activity = compose_activity(activity_content)
             variables.append(activity)
             domains[activity.name] = generate_domain(activity_content, activity)
-            constraints.append(compose_constraints(activity_content, activity))
+            constraints += compose_constraints(activity_content, activity)
 
         return variables, domains, constraints

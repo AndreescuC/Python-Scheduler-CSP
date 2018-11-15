@@ -19,7 +19,7 @@ class Activity:
         self.restrictions = restrictions
 
     def __repr__(self):
-        return "<Test a:%s b:%s>" % (self.a, self.b)
+        return "<%s>" % self.name
 
     def __str__(self):
         return "From str method of Test: a is %s, b is %s" % (self.a, self.b)

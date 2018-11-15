@@ -9,6 +9,17 @@ CONSTRAINT_EXCLUSIVE = 4
 CONSTRAINT_RELATIVE = 5
 CONSTRAINT_DISTANCE = 6
 
+
+constraint_map = {
+    CONSTRAINT_EXACT: 'Interval exact',
+    CONSTRAINT_INSTANCES: 'Instances',
+    CONSTRAINT_PREFERRED: 'Intervale preferate',
+    CONSTRAINT_EXCLUSIVE: 'Intervale excluse',
+    CONSTRAINT_RELATIVE: 'Relativa de alta activitate',
+    CONSTRAINT_DISTANCE: 'La distanta de alta activitate'
+}
+
+
 C_EXACT = 'c_exact'
 C_MISSING_INSTANCE_WEEK = 'c_missing_instance_week'
 C_MISSING_INSTANCE_DAY = 'c_missing_instance_day'
@@ -53,11 +64,8 @@ class Constraint:
         self.costs = costs
         self.strict_interval = strict_interval
 
-    # def __repr__(self):
-    #     return "<Test a:%s b:%s>" % (self.a, self.b)
-    #
-    # def __str__(self):
-    #     return "From str method of Test: a is %s, b is %s" % (self.a, self.b)
+    def __repr__(self):
+        return "<Constraint %s>" % constraint_map[self.constraint_type]
 
     def can_be_evaluated(self, solution):
         return False
