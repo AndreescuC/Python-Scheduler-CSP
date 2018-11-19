@@ -1,6 +1,12 @@
 from copy import copy, deepcopy
 import Constraint
 from IOHandler import IOHandler
+import TimeInterval as ti
+
+
+def restrict_interval(domains, interval: ti.TimeInterval):
+    for activity_name, domain in domains.items():
+        domains[activity_name] = [x for x in domain if x.day != interval.day or ti.intersect(interval, x) <= 0]
 
 
 def get_constraints(var, constraints):
@@ -35,7 +41,7 @@ def PCSP(variables, domains, constraints, solution, cost):
         best_cost = cost
         return True
 
-    elif not domains[variables[0]]:
+    elif not domains[variables[0].name]:
         # Dacă nu mai sunt valori în domeniu, am terminat căutarea
         return False
     elif cost == best_cost:
@@ -44,11 +50,12 @@ def PCSP(variables, domains, constraints, solution, cost):
     else:
         # TODO: Luăm prima variabilă și prima valoare din domeniu
         var = variables[0]
-        val = domains[var].pop(0)
+        val = domains[var.name].pop(0)
 
         # TODO: Construim noua soluție
         new_solution = deepcopy(solution)
-        new_solution[var] = val
+        new_solution[var.name] = val
+        restrict_interval(domains, val)
 
         # TODO: Obținem lista constrângerilor ce pot fi evaluate acum
         valid_constraints = fixed_constraints(new_solution, get_constraints(var, constraints))
@@ -79,7 +86,7 @@ def main():
     variables, domains, constraints = io_handler.read_yaml()
 
     best_solution = {}
-    best_cost = len(constraints)
+    best_cost = 999999
 
     PCSP(variables, deepcopy(domains), constraints, {}, 0)
 

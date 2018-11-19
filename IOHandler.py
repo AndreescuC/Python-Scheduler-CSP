@@ -5,7 +5,6 @@ from Constraint import Constraint
 import Constraint as ConstraintUtil
 from TimeInterval import TimeInterval, generate_all_time_intervals
 
-
 costs = {}
 
 
@@ -47,11 +46,32 @@ def generate_domain(parsed_content, activity: Activity):
             parsed_content['interval']['day']
         )]
 
+    if activity.type == ActivityUtil.TYPE_INSTANCES:
+        day = int(activity.name.split('[')[1].split(',')[0]) if activity.instances_per_week == 7 else None
+        return generate_all_time_intervals(activity.duration, day)
+
     return generate_all_time_intervals(activity.duration)
 
 
 def compose_activity(content):
     restrictions = []
+    activity_type = map_activity_type(content['scheduling_type'])
+
+    if activity_type == ActivityUtil.TYPE_INSTANCES or 'instances_per_day' in content:
+        instances_per_week = content['instances_per_week'] if 'instances_per_week' in content else 7
+        generated_activities = []
+        duration = map_duration(content)
+        for i in range(1, instances_per_week + 1):
+            for j in range(1, content['instances_per_day'] + 1):
+                generated_activities.append(Activity(
+                    name="%s [%d, %d]" % (content['name'], i, j),
+                    duration=duration,
+                    activity_type=activity_type,
+                    restrictions=restrictions,
+                    instances_per_week=instances_per_week,
+                    instances_per_day=content['instances_per_day']
+                ))
+        return generated_activities
 
     return Activity(
         content['name'],
@@ -147,7 +167,7 @@ def compose_constraints(parsed_activity, activity):
     if activity.type == ActivityUtil.TYPE_RELATIVE:
         constraints = [generate_relative_constraint(activity, parsed_activity)]
     if activity.type == ActivityUtil.TYPE_INSTANCES:
-        constraints = [generate_instances_constraint(activity, parsed_activity)]
+        #constraints = [generate_instances_constraint(activity, parsed_activity)]
         for field, content in parsed_activity.items():
 
             if field == 'preferred_intervals':
@@ -189,13 +209,19 @@ class IOHandler:
         domains = {}
         global costs
         costs = content['costs']
-        costs['c_strict'] = 99999
+        costs[ConstraintUtil.C_EXACT] = 999999
 
         for parsed_activity in content['activity_list']:
             activity_content = parsed_activity['activity']
             activity = compose_activity(activity_content)
-            variables.append(activity)
-            domains[activity.name] = generate_domain(activity_content, activity)
-            constraints += compose_constraints(activity_content, activity)
+            if type(activity) == list:
+                variables += activity
+                for current_activity in activity:
+                    domains[current_activity.name] = generate_domain(activity_content, current_activity)
+                constraints += compose_constraints(activity_content, activity[0])
+            else:
+                variables.append(activity)
+                domains[activity.name] = generate_domain(activity_content, activity)
+                constraints += compose_constraints(activity_content, activity)
 
         return variables, domains, constraints

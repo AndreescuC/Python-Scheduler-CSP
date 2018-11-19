@@ -68,59 +68,97 @@ class Constraint:
         return "<Constraint %s>" % constraint_map[self.constraint_type]
 
     def can_be_evaluated(self, solution):
-        return False
+        return (self.activity is None or self.activity.name in solution) and\
+            (self.relative_activity is None or self.relative_activity.name in solution)
 
     def depends_on(self, var: Activity):
-        return False
+        return self.activity == var or self.relative_activity == var
 
     def compute_cost_exact(self):
-        return self.costs[C_EXACT]
+        return 0
 
-    def compute_cost_relative(self, activity_start, relative_interval_start, relative_interval_end):
+    def compute_cost_relative(self, interval: TimeInterval, relative_interval: TimeInterval):
         cost = self.costs[C_RELATIVE]
 
-        if activity_start <= relative_interval_start:
-            return cost * (activity_start - relative_interval_start).total_seconds()
-        if activity_start > relative_interval_end:
-            return cost * (activity_start - relative_interval_end).total_seconds()
+        if interval.start <= relative_interval.start:
+            return cost * (interval.start - relative_interval.start).total_seconds()
+        if interval.start > relative_interval.end:
+            return cost * (interval.start - relative_interval.end).total_seconds()
         return None
 
-    def compute_cost_preferred(self, activity_start, activity_end, preferred_start, preferred_end):
+    def find_max_overlay(self, interval: TimeInterval):
+        interval_list = self.preferred
+        if interval_list is None:
+            raise ValueError(
+                'Unexpected situation during constraint evaluation: no preferred intervals for activity %s'
+                % self.activity.name
+            )
+
+        max_overlay = interval_intersect(interval, interval_list[0])
+        for current_interval in interval_list[1:]:
+            overlay = interval_intersect(interval, current_interval)
+            if overlay > list(max_overlay.values())[0]:
+                max_overlay = overlay
+
+        return max_overlay
+
+    def compute_cost_preferred(self, interval: TimeInterval):
         cost = self.costs[C_PREFERRED_INTERVAL]
+        activities_intersection = self.find_max_overlay(interval)
 
-        activity_interval = TimeInterval(activity_start, activity_end)
-        preferred_activity_interval = TimeInterval(preferred_start, preferred_end)
+        return cost * (interval.duration - activities_intersection) / interval.duration
 
-        activities_intersection = interval_intersect(activity_interval, preferred_activity_interval)
-
-        return cost * (activity_interval.duration - activities_intersection) / activity_interval.duration
-
-    def compute_cost_excluded(self, activity_start, activity_end, excluded_intervals):
+    def compute_cost_excluded(self, interval: TimeInterval):
         cost = self.costs[C_EXCLUDED_INTERVAL]
-        activity_interval = TimeInterval(activity_start, activity_end)
+
+        if self.excluded is None:
+            raise ValueError(
+                'Unexpected situation during constraint evaluation: no excluded intervals for activity %s'
+                % self.activity.name
+            )
 
         s = 0
-        for excluded_interval in excluded_intervals:
+        for excluded_interval in self.excluded:
             excluded_interval = TimeInterval(excluded_interval[0], excluded_interval[1])
-            s += interval_intersect(activity_interval, excluded_interval)
+            s += interval_intersect(interval, excluded_interval)
 
-        return cost * s / activity_interval.duration
+        return cost * s / interval.duration
 
-    def compute_cost_distance(self, activity1_start, activity1_end, activity2_start, activity2_end, buffer):
+    def compute_cost_distance(self, interval: TimeInterval, relative_activity_interval):
         cost = self.costs[C_ACTIVITY_DISTANCE]
-        activity2_interval = TimeInterval(activity2_start, activity2_end)
-        interval = TimeInterval(activity1_end, activity1_end + buffer) if activity2_start >= activity1_end\
-            else (TimeInterval(activity1_start - buffer, activity1_start) if activity2_end < activity1_start else None)
 
-        return cost * interval_intersect(activity2_interval, interval)
+        interval = TimeInterval(interval.end, interval.end + self.distance_from) \
+            if relative_activity_interval.start >= interval.end \
+            else (TimeInterval(interval.start - self.distance_from, interval.start)
+                  if relative_activity_interval.end < interval.start
+                  else None
+                  )
 
-    def evaluate(self):
-        evaluating_function, parameters = {
-            CONSTRAINT_RELATIVE: self.compute_cost_relative,
-            CONSTRAINT_EXCLUSIVE: self.compute_cost_excluded,
-            CONSTRAINT_PREFERRED: self.compute_cost_preferred,
-            CONSTRAINT_DISTANCE: self.compute_cost_distance,
-            CONSTRAINT_EXACT: self.compute_cost_distance
+        return cost * interval_intersect(relative_activity_interval, interval)
+
+    def compute_cost_instances(self, interval: TimeInterval):
+        return 0
+
+    def evaluate(self, solution):
+
+        if self.activity.name not in solution:
+            raise ValueError(
+                'Unexpected situation during constraint evaluation: no value for activity in solution'
+            )
+        interval = solution[self.activity.name]
+
+        if self.relative_activity is not None and self.relative_activity.name not in solution:
+            raise ValueError(
+                'Unexpected situation during constraint evaluation: no value for realtive activity in solution'
+            )
+        relative_interval = solution[self.relative_activity.name] if self.relative_activity is not None else None
+        method, parameters = {
+            CONSTRAINT_RELATIVE:  (self.compute_cost_relative, [interval, relative_interval]),
+            CONSTRAINT_INSTANCES: (self.compute_cost_instances, [interval]),
+            CONSTRAINT_EXCLUSIVE: (self.compute_cost_excluded, [interval]),
+            CONSTRAINT_PREFERRED: (self.compute_cost_preferred, [interval]),
+            CONSTRAINT_DISTANCE:  (self.compute_cost_distance, [interval, relative_interval]),
+            CONSTRAINT_EXACT:     (self.compute_cost_exact, [])
         }[self.constraint_type]
 
-        return evaluating_function(*parameters)
+        return method(*parameters)

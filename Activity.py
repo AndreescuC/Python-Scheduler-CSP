@@ -11,12 +11,16 @@ class Activity:
             name,
             duration,
             activity_type,
-            restrictions
+            restrictions,
+            instances_per_week=None,
+            instances_per_day=None
     ):
         self.name = name
         self.duration = duration
         self.type = activity_type
         self.restrictions = restrictions
+        self.instances_per_week = instances_per_week
+        self.instances_per_day = instances_per_day
 
     def __repr__(self):
         return "<%s>" % self.name
